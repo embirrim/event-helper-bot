@@ -8,7 +8,7 @@ class Client(commands.Bot):
         print(f'Logged in as {self.user}')
 
         try:
-             guild = discord.Object(id=471950858079436801)
+             guild = discord.Object(id=1440714440512114822)
              synced = await self.tree.sync(guild=guild)
              print(f'Synced {len(synced)} commands to guild {guild.id}')
 
@@ -25,7 +25,7 @@ intents.members = True
 
 client = Client(command_prefix="!", intents = intents)
 
-GUILD_ID = discord.Object(id=471950858079436801)
+GUILD_ID = discord.Object(id=1440714440512114822)
 
 
 @client.tree.command(name="create_event", description="create role, category, and channels for an event", guild=GUILD_ID)
@@ -47,7 +47,7 @@ async def create_event(interaction: discord.Interaction, event_name: str):
                     }
           await event_category.edit(overwrites = overwrites)
           event_text_channels = [
-               "announcements-and-call-times"
+               "announcements-and-call-times",
                "general",
                "network",
                "offtopic"
