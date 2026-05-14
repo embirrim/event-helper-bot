@@ -2,15 +2,21 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import has_permissions
 from discord import app_commands
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
 
 class Client(commands.Bot):
     async def on_ready(self):
         print(f'Logged in as {self.user}')
 
         try:
-             guild = discord.Object(id=1440714440512114822)
-             synced = await self.tree.sync(guild=guild)
-             print(f'Synced {len(synced)} commands to guild {guild.id}')
+             synced = await self.tree.sync(guild=GUILD_ID)
+             print(f'Synced {len(synced)} commands to guild {GUILD_ID.id}')
 
         except Exception as e:
              print(f'Error: {e}')
@@ -25,7 +31,6 @@ intents.members = True
 
 client = Client(command_prefix="!", intents = intents)
 
-GUILD_ID = discord.Object(id=1440714440512114822)
 
 
 @client.tree.command(name="create_event", description="create role, category, and channels for an event", guild=GUILD_ID)
@@ -38,12 +43,14 @@ async def create_event(interaction: discord.Interaction, event_name: str):
      
      try:
           event_it_role = discord.utils.get(interaction.guild.roles, name = "Event IT")
+          bot_role = discord.utils.get(interaction.guild.roles, name = "Bot")
           event_role = await interaction.guild.create_role(name = event_name)
           event_category = await interaction.guild.create_category(name = event_name)
           overwrites = {
                     interaction.guild.default_role: discord.PermissionOverwrite(view_channel = False, read_messages=False, connect=False),
                     event_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, connect=True, speak=True),
-                    event_it_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, connect=True, speak=True)
+                    event_it_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, connect=True, speak=True),
+                    bot_role: discord.PermissionOverwrite(read_messages=True, send_messages=True, connect=True, speak=True)
                     }
           await event_category.edit(overwrites = overwrites)
           event_text_channels = [
@@ -79,4 +86,4 @@ async def create_event(interaction: discord.Interaction, event_name: str):
         
         
         
-client.run("MTQ4MzU4NzA4ODY0MDExNDczOQ.GNutUt.Luhc2g3YpRscpE0TBamaGVETHfGEEAZLKQbtAQ")
+client.run(TOKEN)
