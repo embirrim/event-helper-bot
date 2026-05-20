@@ -12,7 +12,7 @@ import database
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = discord.Object(id=os.getenv("GUILD_ID"))
+GUILD_ID = discord.Object(id=int(os.getenv("GUILD_ID", "0")))
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -35,14 +35,19 @@ async def on_ready():
 
 
 async def main():
-    
     database.setup()
 
     await bot.load_extension('cogs.event_creator')
-    ### await bot.load_extension('cogs.message_scheduler')
-    
-    await bot.start(TOKEN)
-    
+    await bot.load_extension('cogs.message_scheduler')
+
+    try:
+        assert TOKEN is not None, "DISCORD_TOKEN environment variable not set"
+        await bot.start(TOKEN)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        print('Received stop signal, shutting down bot...')
+    finally:
+        if not bot.is_closed():
+            await bot.close()
 
 
 if __name__ == '__main__':

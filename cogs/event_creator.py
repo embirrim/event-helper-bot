@@ -1,7 +1,6 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-
 from main import GUILD_ID
 
 
@@ -12,8 +11,9 @@ class EventCreator(commands.Cog):
     @app_commands.command(name="create_event", description="Create role, category, and channels for an event")
     @app_commands.guilds(GUILD_ID)
     @app_commands.default_permissions(administrator=True)
-    async def create_event(self, interaction: discord.Interaction, event_name: str) -> None:
+    async def create_event(self, interaction: discord.Interaction, event_name: str):
         await interaction.response.defer(ephemeral=True)
+        assert interaction.guild is not None
 
         if discord.utils.get(interaction.guild.categories, name=event_name):
             await interaction.followup.send("Event category already exists!")
