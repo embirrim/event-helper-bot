@@ -24,16 +24,16 @@ class MessageScheduler(commands.Cog):
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            cursor.execute('''SELECT id, channel_id, message_content, send_at FROM scheduled_messages WHERE send_at <= ?''', (int(datetime.datetime.now(datetime.timezone.utc).timestamp()),))
+            cursor.execute('''SELECT id, user_id,channel_id, message_content, send_at FROM scheduled_messages WHERE send_at <= ?''', (int(datetime.datetime.now(datetime.timezone.utc).timestamp()),))
             messages_to_send = cursor.fetchall()
 
-            for msg_id, channel_id, message_content, send_at in messages_to_send:
+            for msg_id, user_id, channel_id, message_content, send_at in messages_to_send:
                 channel = self.bot.get_channel(channel_id)
                 if channel is None:
                     print(f'Channel {channel_id} not found.')
                 elif isinstance(channel, discord.abc.Messageable):
                     try:
-                        await channel.send(message_content)
+                        await channel.send(f'{user_id} scheduled this message:\n{message_content}')
                     except Exception as e:
                         print(f'Error sending message to channel {channel_id}: {e}')
                 else:
@@ -57,9 +57,18 @@ class MessageScheduler(commands.Cog):
     async def schedule_message_at(self,
                                 interaction: discord.Interaction,
                                 message: str,
-                                send_at: str,
-                                timezone: str = "Europe/Berlin"):
+                                send_at: str,):
         await interaction.response.defer(ephemeral=True)
+        try:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT timezone FROM user_settings WHERE user_id = ?', (interaction.user.id,))
+            result = cursor.fetchone()
+            timezone = result[0] if result else 'UTC'
+            conn.close()
+        except Exception as e:
+            await interaction.followup.send(f'An error occurred while retrieving your timezone: {e}')
+            return
 
         try:
             target_dt = dateparser.parse(send_at, settings={'TIMEZONE': timezone, 'RETURN_AS_TIMEZONE_AWARE': True})
@@ -77,8 +86,8 @@ class MessageScheduler(commands.Cog):
             try:
                 conn = sqlite3.connect('database.db')
                 cursor = conn.cursor()
-                cursor.execute('''INSERT INTO scheduled_messages (channel_id, message_content, send_at) VALUES (?, ?, ?)''',
-                                (interaction.channel_id, message, int(target_dt.astimezone(datetime.timezone.utc).timestamp())))
+                cursor.execute('''INSERT INTO scheduled_messages (channel_id, user_id, message_content, send_at) VALUES (?, ?, ?, ?)''',
+                                (interaction.channel_id, interaction.user.display_name, message, int(target_dt.astimezone(datetime.timezone.utc).timestamp())))
                 conn.commit()
                 conn.close()
                 await interaction.followup.send(
