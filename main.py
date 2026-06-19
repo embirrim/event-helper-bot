@@ -40,6 +40,7 @@ async def main():
     await bot.load_extension('cogs.event_creator')
     await bot.load_extension('cogs.message_scheduler')
     await bot.load_extension('cogs.user_settings')
+    await bot.load_extension('cogs.role_assigner')
 
     try:
         assert TOKEN is not None, "DISCORD_TOKEN environment variable not set"

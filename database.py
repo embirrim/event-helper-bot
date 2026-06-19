@@ -15,7 +15,13 @@ def setup():
     cursor.execute('''CREATE TABLE IF NOT EXISTS user_settings (
                    user_id INTEGER PRIMARY KEY,
                    timezone TEXT
-                   )''')    
+                   )''')
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS role_assigner (
+                   message_id INTEGER,
+                   reaction TEXT,
+                   role_name TEXT
+                   )''')
        
     conn.commit()
     conn.close()
