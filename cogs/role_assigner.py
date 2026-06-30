@@ -84,7 +84,7 @@ class RoleAssigner(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
         message_id="Message ID or Discord message link",
-        emoji="Reaction emoji",
+        emoji="Reaction emoji to assign the role to",
         role_name="Role name to assign to this emoji"
     )
     @app_commands.autocomplete(role_name=role_name_autocomplete)
@@ -94,6 +94,7 @@ class RoleAssigner(commands.Cog):
         message_id: str,
         emoji: str,
         role_name: str,
+        delete_role: bool = False
     ):
         await interaction.response.defer(ephemeral=True)
 
@@ -116,10 +117,6 @@ class RoleAssigner(commands.Cog):
         if parsed_message_id is None or not self.is_role_message(parsed_message_id):
             await interaction.followup.send("Message ID not found in role assignment messages.", ephemeral=True)
             return
-
-        if interaction.channel is None or interaction.channel.type != discord.ChannelType.text:
-            await interaction.followup.send("This command can only be used in text channels.", ephemeral=True)
-            return
         
         if not emoji_module.is_emoji(emoji):
             await interaction.followup.send("Invalid emoji, please use a Unicode emoji.", ephemeral=True)
@@ -129,11 +126,6 @@ class RoleAssigner(commands.Cog):
             await interaction.followup.send(f"Role '{role_name}' does not exist in this server, did you use autocomplete?", ephemeral=True)
             return
 
-
-        # Try to fetch the message
-        if interaction.channel is None:
-            await interaction.followup.send("Could not access the channel.", ephemeral=True)
-            return
 
         try:
             if not isinstance(interaction.channel, TextChannel):
@@ -154,23 +146,29 @@ class RoleAssigner(commands.Cog):
             cursor = conn.cursor()
             
             # Check if this emoji already exists for this message
-            cursor.execute('SELECT role_name FROM role_assigner WHERE message_id = ? AND reaction = ?',
-                          (parsed_message_id, emoji))
+            cursor.execute('SELECT role_name FROM role_assigner WHERE message_id = ? AND (reaction = ? OR role_name = ?)',
+                          (parsed_message_id, emoji, role_name))
             existing = cursor.fetchone()
             
-            if existing:
-                # Update existing entry
+            if delete_role and not existing:
+                await interaction.followup.send("No existing role assignment found for this emoji to delete.", ephemeral=True)
+                return
+            elif delete_role and existing:
+                cursor.execute('DELETE FROM role_assigner WHERE message_id = ? AND reaction = ?',
+                                (parsed_message_id, emoji))
+                # Remove from in-memory cache
+                self.ROLE_MAP.pop((parsed_message_id, emoji), None)
+            elif existing: 
                 cursor.execute('UPDATE role_assigner SET role_name = ? WHERE message_id = ? AND reaction = ?',
-                              (role_name, parsed_message_id, emoji))
+                            (role_name, parsed_message_id, emoji))
+                self.ROLE_MAP[(parsed_message_id, emoji)] = role_name
             else:
                 # Insert new entry
                 cursor.execute('INSERT INTO role_assigner (message_id, reaction, role_name) VALUES (?, ?, ?)',
                               (parsed_message_id, emoji, role_name))
-            
+                self.ROLE_MAP[(parsed_message_id, emoji)] = role_name
             conn.commit()
             conn.close()
-            # update in-memory cache
-            self.ROLE_MAP[(parsed_message_id, emoji)] = role_name
             print(f"Updated role assignment: message {parsed_message_id}, emoji {emoji}, role {role_name}")
         except Exception as e:
             await interaction.followup.send(f"Error updating database: {e}", ephemeral=True)
@@ -189,7 +187,11 @@ class RoleAssigner(commands.Cog):
         # Check if field already exists and update it
         field_found = False
         for i, field in enumerate(embed.fields):
-            if field.name == emoji:
+            if field.name == emoji and delete_role:
+                embed.remove_field(i)
+                field_found = True
+                break
+            elif field.name == emoji:
                 embed.set_field_at(i, name=field_name, value=field_value, inline=True)
                 field_found = True
                 break
@@ -206,11 +208,17 @@ class RoleAssigner(commands.Cog):
 
         # Add the reaction if not already present
         try:
-            await message.add_reaction(emoji)
+            if delete_role:
+                await message.clear_reaction(emoji)
+            else:
+                await message.add_reaction(emoji)
         except Exception as e:
             print(f"Error adding reaction: {e}")
 
-        await interaction.followup.send(f"Role message updated: {emoji} now assigns **{role_name}**", ephemeral=True)
+        if delete_role:
+            await interaction.followup.send(f"Role message updated: {emoji} no longer assigns a role", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Role message updated: {emoji} now assigns **{role_name}**", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
