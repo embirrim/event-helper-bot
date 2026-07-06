@@ -11,12 +11,26 @@ import sqlite3
 class MessageScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self.recurring_tasks = []
     
     async def cog_load(self):
         self.message_scheduler.start()
     
     async def cog_unload(self):
         self.message_scheduler.cancel()
+        for task in self.recurring_tasks:
+            task.cancel()
+
+    def _create_recurring_message_task(self, channel, message, user_name, target_time):
+        @tasks.loop(time=target_time)
+        async def send_recurring_message():
+            try:
+                await channel.send(f'{user_name} scheduled this recurring message:\n{message}')
+            except Exception as e:
+                print(f'Error sending recurring message: {e}')
+
+        send_recurring_message.start()
+        return send_recurring_message
 
 
     @tasks.loop(seconds=30)
@@ -95,6 +109,48 @@ class MessageScheduler(commands.Cog):
                 )
             except Exception as e:
                 await interaction.followup.send(f'An error occurred while scheduling the message: {e}')
+    
+    @app_commands.command(name="schedule_recurring_message_at", description="Schedule a recurring message to be sent at a specific time each day")
+    @app_commands.guilds(GUILD_ID)
+    async def schedule_recurring_message_at(self,
+                                interaction: discord.Interaction,
+                                message: str,
+                                send_at: str):
+        await interaction.response.defer(ephemeral=True)
+        
+        try:
+            conn = sqlite3.connect('database.db')
+            cursor = conn.cursor()
+            cursor.execute('SELECT timezone FROM user_settings WHERE user_id = ?', (interaction.user.id,))
+            result = cursor.fetchone()
+            timezone = result[0] if result else 'UTC'
+            conn.close()
+        except Exception as e:
+            await interaction.followup.send(f'An error occurred while retrieving your timezone: {e}')
+            return
+
+        try:
+            target_time = dateparser.parse(send_at, settings={'TIMEZONE': timezone, 'RETURN_AS_TIMEZONE_AWARE': True}).time()
+        except Exception as e:
+            await interaction.followup.send(f'An error occurred: {e}')
+            return
+      
+        if target_time is None:
+            await interaction.followup.send("Sorry, I couldn't understand the time you provided. Please make sure to use a valid format.")
+            return
+        elif not isinstance(interaction.channel, discord.TextChannel):
+            await interaction.followup.send("This command can only be used in a text channel.")
+            return
+
+        recurring_task = self._create_recurring_message_task(
+            channel=interaction.channel,
+            message=message,
+            user_name=interaction.user.display_name,
+            target_time=target_time,
+        )
+        self.recurring_tasks.append(recurring_task)
+
+        await interaction.followup.send(f"I will send the following recurring message every day at {target_time} {timezone}:\n\n{message}")
 
 
 async def setup(bot: commands.Bot) -> None:
