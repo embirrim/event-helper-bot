@@ -22,6 +22,15 @@ def setup():
                    reaction TEXT,
                    role_name TEXT
                    )''')
+
+    cursor.execute('''CREATE TABLE IF NOT EXISTS recurring_messages (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    channel_id INTEGER,
+                    user_name TEXT,
+                    message_content TEXT,
+                    send_at INTEGER
+                   )''')
+                   
        
     conn.commit()
     conn.close()
