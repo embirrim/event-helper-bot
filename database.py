@@ -23,7 +23,7 @@ def setup():
                    role_name TEXT
                    )''')
 
-    cursor.execute('''CREATE TABLE IF NOT EXISTS recurring_messages (
+    cursor.execute('''CREATE TABLE IF NOT EXISTS daily_messages (
                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     channel_id INTEGER,
                     user_name TEXT,

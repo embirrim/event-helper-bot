@@ -11,8 +11,8 @@ import sqlite3
 class MessageScheduler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.recurring_tasks = {}
-        self._recurring_messages_loaded = False
+        self.daily_tasks = {}
+        self._daily_messages_loaded = False
 
     async def _get_channel(self, channel_id: int):
         try:
@@ -24,60 +24,60 @@ class MessageScheduler(commands.Cog):
     async def cog_load(self):
         self.message_scheduler.start()
 
-    async def _load_recurring_messages(self):
-        if self._recurring_messages_loaded:
+    async def _load_daily_messages(self):
+        if self._daily_messages_loaded:
             return
 
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            cursor.execute('SELECT id, channel_id, user_name, message_content, send_at FROM recurring_messages')
-            recurring_messages = cursor.fetchall()
+            cursor.execute('SELECT id, channel_id, user_name, message_content, send_at FROM daily_messages')
+            daily_messages = cursor.fetchall()
 
-            for recurring_id, channel_id, user_name, message_content, send_at in recurring_messages:
+            for daily_id, channel_id, user_name, message_content, send_at in daily_messages:
                 channel = await self._get_channel(channel_id)
                 if channel is not None and isinstance(channel, discord.abc.Messageable):
                     target_dt = datetime.datetime.fromtimestamp(send_at, tz=ZoneInfo("UTC"))
                     target_time = target_dt.timetz()
-                    recurring_task = self._create_recurring_message_task(
+                    daily_task = self._create_daily_message_task(
                         channel=channel,
                         message=message_content,
                         user_name=user_name,
                         target_time=target_time,
                         timezone_name="UTC",
-                        recurring_id=recurring_id,
+                        daily_id=daily_id,
                     )
-                    self.recurring_tasks[recurring_id] = recurring_task
+                    self.daily_tasks[daily_id] = daily_task
                 else:
                     print(f'Channel {channel_id} not found or is not messageable.')
         except Exception as e:
-            print(f'Error loading recurring messages from database: {e}')
+            print(f'Error loading daily messages from database: {e}')
         finally:
             conn.close()
 
-        self._recurring_messages_loaded = True
-    
+        self._daily_messages_loaded = True
+
     async def cog_unload(self):
         self.message_scheduler.cancel()
-        for task in self.recurring_tasks.values():
+        for task in self.daily_tasks.values():
             task.cancel()
 
-    def _create_recurring_message_task(self, channel, message, user_name, target_time, timezone_name=None, recurring_id=None):
+    def _create_daily_message_task(self, channel, message, user_name, target_time, timezone_name=None, daily_id=None):
         if target_time is not None and target_time.tzinfo is None and timezone_name:
             target_time = target_time.replace(tzinfo=ZoneInfo(timezone_name))
 
         @tasks.loop(time=target_time)
-        async def send_recurring_message():
+        async def send_daily_message():
             try:
-                await channel.send(f'{user_name} scheduled this recurring message:\n{message}')
-                print(f'Sent recurring message to channel {channel.id} at {datetime.datetime.now(ZoneInfo("UTC"))}')
+                await channel.send(f'{user_name} scheduled this daily message:\n{message}')
+                print(f'Sent daily message to channel {channel.id} at {datetime.datetime.now(ZoneInfo("UTC"))}')
             except Exception as e:
-                print(f'Error sending recurring message: {e}')
+                print(f'Error sending daily message: {e}')
 
-        send_recurring_message.start()
-        if recurring_id is not None:
-            self.recurring_tasks[recurring_id] = send_recurring_message
-        return send_recurring_message
+        send_daily_message.start()
+        if daily_id is not None:
+            self.daily_tasks[daily_id] = send_daily_message
+        return send_daily_message
 
 
 
@@ -113,7 +113,7 @@ class MessageScheduler(commands.Cog):
     @message_scheduler.before_loop
     async def before_message_scheduler(self):
         await self.bot.wait_until_ready()
-        await self._load_recurring_messages()
+        await self._load_daily_messages()
 
 
 
@@ -161,10 +161,10 @@ class MessageScheduler(commands.Cog):
             except Exception as e:
                 await interaction.followup.send(f'An error occurred while scheduling the message: {e}')
     
-    @app_commands.command(name="schedule_recurring_message_at", description="Schedule a recurring message to be sent at a specific time each day")
+    @app_commands.command(name="daily_message_at", description="Schedule a daily message to be sent at a specific time every day")
     @app_commands.guilds(GUILD_ID)
     @app_commands.default_permissions(administrator=True)
-    async def schedule_recurring_message_at(self,
+    async def schedule_daily_message_at(self,
                                 interaction: discord.Interaction,
                                 message: str,
                                 send_at: str):
@@ -199,80 +199,80 @@ class MessageScheduler(commands.Cog):
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            cursor.execute('''INSERT INTO recurring_messages (channel_id, user_name, message_content, send_at) VALUES (?, ?, ?, ?)''',
+            cursor.execute('''INSERT INTO daily_messages (channel_id, user_name, message_content, send_at) VALUES (?, ?, ?, ?)''',
                             (interaction.channel_id, interaction.user.display_name, message, int(target_dt.astimezone(datetime.timezone.utc).timestamp())))
-            recurring_id = cursor.lastrowid
+            daily_id = cursor.lastrowid
             conn.commit()
             conn.close()
         except Exception as e:
-            await interaction.followup.send(f'An error occurred while scheduling the recurring message: {e}')
+            await interaction.followup.send(f'An error occurred while scheduling the daily message: {e}')
             return
         
-        recurring_task = self._create_recurring_message_task(
+        daily_task = self._create_daily_message_task(
             channel=interaction.channel,
             message=message,
             user_name=interaction.user.display_name,
             target_time=target_time,
             timezone_name=timezone,
-            recurring_id=recurring_id,
+            daily_id=daily_id,
         )
-        self.recurring_tasks[recurring_id] = recurring_task
+        self.daily_tasks[daily_id] = daily_task
 
         await interaction.followup.send(
-            f"I will send the following recurring message every day at {target_time} {timezone}:\n\n{message}\n\nID: {recurring_id}"
+            f"I will send the following daily message every day at {target_time} {timezone}:\n\n{message}\n\nID: {daily_id}"
         )
 
-    @app_commands.command(name="cancel_recurring_message", description="Cancel a recurring message by its ID")
+    @app_commands.command(name="cancel_daily_message", description="Cancel a daily message by its ID")
     @app_commands.guilds(GUILD_ID)
     @app_commands.default_permissions(administrator=True)
-    async def cancel_recurring_message(self, interaction: discord.Interaction, recurring_id: int):
+    async def cancel_daily_message(self, interaction: discord.Interaction, daily_id: int):
         await interaction.response.defer(ephemeral=True)
 
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM recurring_messages WHERE id = ? AND channel_id = ?', (recurring_id, interaction.channel_id))
+            cursor.execute('DELETE FROM daily_messages WHERE id = ? AND channel_id = ?', (daily_id, interaction.channel_id))
             deleted = cursor.rowcount
             conn.commit()
             conn.close()
         except Exception as e:
-            await interaction.followup.send(f'An error occurred while canceling the recurring message: {e}')
+            await interaction.followup.send(f'An error occurred while canceling the daily message: {e}')
             return
 
-        task = self.recurring_tasks.pop(recurring_id, None)
+        task = self.daily_tasks.pop(daily_id, None)
         if task is not None:
             task.cancel()
 
         if deleted == 0:
-            await interaction.followup.send(f'No recurring message with ID {recurring_id} was found in this channel.')
+            await interaction.followup.send(f'No daily message with ID {daily_id} was found in this channel.')
         else:
-            await interaction.followup.send(f'Canceled recurring message {recurring_id}.')
+            await interaction.followup.send(f'Canceled daily message {daily_id}.')
 
 
-    @app_commands.command(name="list_recurring_messages", description="List all recurring messages in this channel")
+    @app_commands.command(name="list_daily_messages", description="List all daily messages in this channel")
     @app_commands.guilds(GUILD_ID)
     @app_commands.default_permissions(administrator=True)
-    async def list_recurring_messages(self, interaction: discord.Interaction):
+    async def list_daily_messages(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
         try:
             conn = sqlite3.connect('database.db')
             cursor = conn.cursor()
-            cursor.execute('SELECT id, user_name, message_content, send_at FROM recurring_messages WHERE channel_id = ?', (interaction.channel_id,))
-            recurring_messages = cursor.fetchall()
+            cursor.execute('SELECT id, user_name, message_content, send_at FROM daily_messages WHERE channel_id = ?', (interaction.channel_id,))
+            daily_messages = cursor.fetchall()
             conn.close()
         except Exception as e:
-            await interaction.followup.send(f'An error occurred while retrieving recurring messages: {e}')
+            await interaction.followup.send(f'An error occurred while retrieving daily messages: {e}')
             return
 
-        if not recurring_messages:
-            await interaction.followup.send("There are no recurring messages scheduled in this channel.")
+        if not daily_messages:
+            await interaction.followup.send("There are no daily messages scheduled in this channel.")
             return
 
         message_list = []
-        for recurring_id, user_name, message_content, send_at in recurring_messages:
+        for daily_id, user_name, message_content, send_at in daily_messages:
             target_dt = datetime.datetime.fromtimestamp(send_at, tz=ZoneInfo("UTC"))
-            message_list.append(f"ID: {recurring_id}, User: {user_name}, Time (UTC): {target_dt}, Message: {message_content}")
+            message_list.append(f"ID: {daily_id}, User: {user_name}, Time (UTC): {target_dt}, Message: {message_content}")
 
         await interaction.followup.send("\n".join(message_list))
 
