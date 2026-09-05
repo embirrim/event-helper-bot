@@ -163,7 +163,7 @@ class MessageScheduler(commands.Cog):
     
     @app_commands.command(name="daily_message_at", description="Schedule a daily message to be sent at a specific time every day")
     @app_commands.guilds(GUILD_ID)
-    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_any_role("Event IT", "Bot")
     async def schedule_daily_message_at(self,
                                 interaction: discord.Interaction,
                                 message: str,

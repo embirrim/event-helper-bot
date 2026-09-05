@@ -69,6 +69,7 @@ class EventCreator(commands.Cog):
 
             event_forum_channels = [
                 "setup-forum",
+                "incidents",
             ]
             for channel_name in event_forum_channels:
                 await interaction.guild.create_forum(name=channel_name, category=event_category)
