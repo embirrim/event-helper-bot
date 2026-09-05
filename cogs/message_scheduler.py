@@ -224,7 +224,7 @@ class MessageScheduler(commands.Cog):
 
     @app_commands.command(name="cancel_daily_message", description="Cancel a daily message by its ID")
     @app_commands.guilds(GUILD_ID)
-    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_any_role("Event IT", "Bot")
     async def cancel_daily_message(self, interaction: discord.Interaction, daily_id: int):
         await interaction.response.defer(ephemeral=True)
 
@@ -251,7 +251,7 @@ class MessageScheduler(commands.Cog):
 
     @app_commands.command(name="list_daily_messages", description="List all daily messages in this channel")
     @app_commands.guilds(GUILD_ID)
-    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_any_role("Event IT", "Bot")
     async def list_daily_messages(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
