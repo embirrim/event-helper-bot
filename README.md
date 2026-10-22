@@ -61,7 +61,7 @@ The bot creates `database.db` automatically on first startup. Slash commands are
 
 | Command | Access | Description |
 | --- | --- | --- |
-| `/create_event event_name` | Administrator | Creates an event role, category, and text, voice, and forum channels. |
+| `/create_event event_name` | `Event IT` or `Bot` role | Creates an event role, category, and text, voice, and forum channels. |
 | `/schedule_message_at message send_at` | Any member | Sends a one-time message at a future date and time. |
 | `/daily_message_at message send_at` | `Event IT` or `Bot` role | Sends a message every day at the selected time. |
 | `/list_daily_messages` | `Event IT` or `Bot` role | Lists daily messages scheduled in the current channel. |

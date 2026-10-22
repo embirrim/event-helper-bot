@@ -10,7 +10,7 @@ class EventCreator(commands.Cog):
 
     @app_commands.command(name="create_event", description="Create role, category, and channels for an event")
     @app_commands.guilds(GUILD_ID)
-    @app_commands.default_permissions(administrator=True)
+    @app_commands.checks.has_any_role("Event IT", "Bot")
     async def create_event(self, interaction: discord.Interaction, event_name: str):
         await interaction.response.defer(ephemeral=True)
         assert interaction.guild is not None
